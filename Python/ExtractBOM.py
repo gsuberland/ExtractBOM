@@ -1,33 +1,16 @@
-#Author-Autodesk Inc.
-#Description-Etract BOM information from active design.
+#Author-Autodesk Inc. and Graham Sutherland
+#Description-Improved script to extract BOM information from active design.
 
 import adsk.core, adsk.fusion, traceback
 
-def spacePadRight(value, length):
-    pad = ''
-    if type(value) is str:
-        paddingLength = length - len(value) + 1
-    else:
-        paddingLength = length - value + 1
-    while paddingLength > 0:
-        pad += ' '
-        paddingLength -= 1
-
-    return str(value) + pad
-
-def walkThrough(bom):
-    mStr = ''
-    for item in bom:
-        mStr += spacePadRight(item['name'], 25) + str(spacePadRight(item['instances'], 15)) + str(item['volume']) + '\n'
-    return mStr
-
-def main():
+def run(context):
     ui = None
     try:
         app = adsk.core.Application.get()
         ui  = app.userInterface
 
-        design = app.activeProduct
+        product = app.activeProduct
+        design = adsk.fusion.Design.cast(product)
         title = 'Extract BOM'
         if not design:
             ui.messageBox('No active design', title)
@@ -54,7 +37,8 @@ def main():
                 volume = 0
                 bodies = comp.bRepBodies
                 for bodyK in bodies:
-                    volume += bodyK.volume
+                    if bodyK.isSolid:
+                        volume += bodyK.volume
                 
                 # Add this component to the BOM
                 bom.append({
@@ -63,15 +47,18 @@ def main():
                     'instances': 1,
                     'volume': volume
                 })
+        
+        # Figure out how wide the columns need to be
+        nameColWidth = max(25, max(len(item['name']) for item in bom) + 1)
+        instancesColWidth = max(15, max(len(str(item['instances'])) for item in bom) + 1)
 
         # Display the BOM
-        title = spacePadRight('Name', 25) + spacePadRight('Instances', 15) + 'Volume\n'
-        msg = title + '\n' + walkThrough(bom)
-        
-        ui.messageBox(msg, 'Bill Of Materials')
+        bomStr = 'Name'.ljust(nameColWidth) + 'Instances'.ljust(instancesColWidth) + 'Volume\n'
+        for item in bom:
+            bomStr += item['name'].ljust(nameColWidth) + str(item['instances']).ljust(instancesColWidth) + str(item['volume']) + '\n'
+
+        ui.messageBox(bomStr, 'Bill Of Materials')
 
     except:
         if ui:
             ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
-
-main()
